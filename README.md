@@ -1,7 +1,5 @@
 # SimCLR Transfer Learning for Medical Image Classification
 
-**Author:** Elshaday Desalegn  
-**Date:** January 5, 2025
 
 ## Overview
 
