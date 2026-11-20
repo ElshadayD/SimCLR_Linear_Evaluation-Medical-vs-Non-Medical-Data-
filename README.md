@@ -10,7 +10,8 @@ Using a ResNet-50 model pretrained on CIFAR-100, three experiments were conducte
 The main research question was whether representations learned from natural images can generalize to grayscale medical images such as chest X-rays.
 ## Demo
 
-![Project Demo](Image1.png)(Image2.png)
+![Project Demo](Image1.png)
+![](Image2.png)
 ## Datasets
 
 **1. Chest X-Ray Pneumonia (Medical)**
