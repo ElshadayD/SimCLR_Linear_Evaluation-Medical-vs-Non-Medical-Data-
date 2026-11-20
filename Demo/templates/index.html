@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen · Chest X-ray Screening</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1d24;--panel:#142a33;--line:#25414c;--film:#e8eff0;--mut:#8fa8b0;--ok:#4cc9a0;--bad:#ff7a5c;--acc:#7fd1e6;
+--r:14px;font-family:'Public Sans',system-ui,sans-serif}
+@media(prefers-color-scheme:light){:root{--bg:#eef3f4;--panel:#fff;--line:#d3dfe2;--film:#10252d;--mut:#5a7680;--ok:#12805f;--bad:#c4421f;--acc:#12708a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--film);line-height:1.5}
+h1,h2,.big{font-family:'Bricolage Grotesque',sans-serif;margin:0}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-bottom:1px solid var(--line);gap:16px;flex-wrap:wrap}
+h1{font-size:26px}.sub{color:var(--mut);font-size:14px}
+.chip{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-size:13px;color:var(--mut)}
+main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px;padding:24px 32px;max-width:1280px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:16px}header{padding:16px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:36px 20px;text-align:center;cursor:pointer;transition:.2s}
+.drop:hover,.drop.on{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.drop b{font-family:'Bricolage Grotesque';font-size:20px;display:block}
+button,.btn{font:inherit;background:var(--acc);color:#04161c;border:0;border-radius:10px;padding:9px 16px;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--film);border:1px solid var(--line)}
+button:focus-visible,.drop:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.row.sp{justify-content:space-between}
+.viewer{position:relative;background:#000;border-radius:var(--r);aspect-ratio:1;overflow:hidden;margin:14px 0}
+.viewer img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.empty{display:grid;place-items:center;height:100%;color:#7c9aa3;text-align:center;padding:24px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:transparent;color:var(--mut);border-radius:0;padding:7px 14px}
+.seg button[aria-pressed=true]{background:var(--acc);color:#04161c}
+.verdict{border-left:6px solid var(--mut);padding-left:16px}
+.verdict.ok{border-color:var(--ok)}.verdict.bad{border-color:var(--bad)}
+.big{font-size:38px;line-height:1.1}.ok .big{color:var(--ok)}.bad .big{color:var(--bad)}
+.bar{margin:14px 0 4px}.bar .t{display:flex;justify-content:space-between;font-size:14px}
+.track{height:12px;background:var(--line);border-radius:9px;overflow:hidden;margin-top:5px}
+.fill{height:100%;border-radius:9px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+label{font-size:14px;color:var(--mut)}
+.strip{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
+.th{flex:0 0 64px;height:64px;border-radius:10px;border:2px solid var(--line);overflow:hidden;padding:0;background:#000;position:relative}
+.th.sel{border-color:var(--acc)}.th img{width:100%;height:100%;object-fit:cover}
+.th i{position:absolute;bottom:3px;right:3px;width:12px;height:12px;border-radius:50%;border:2px solid #000}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:500}tr.h{cursor:pointer}tr.h:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.note{font-size:13px;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:14px}
+.spin{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:s .8s linear infinite;display:none}
+.busy .spin{display:inline-block}@keyframes s{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Lumen</h1><div class="sub">Chest X-ray pneumonia screening with explainable heatmaps</div></div>
+  <span class="chip">Running on {{ device|upper }}</span>
+</header>
+
+<main id="app">
+  <section class="card">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose chest X-ray images">
+      <b>Drop chest X-rays here</b>
+      <span class="sub">or click to browse. Add one image or a whole batch (JPG, PNG).</span>
+      <input id="file" type="file" accept="image/*" multiple hidden>
+    </div>
+    <div class="row sp" style="margin-top:14px">
+      <label class="row"><input type="checkbox" id="tta"> Average with mirrored view (steadier, slower)</label>
+      <span class="row"><span class="spin" id="spin"></span><span class="sub" id="status"></span></span>
+    </div>
+    <div class="strip" id="strip" aria-label="Analyzed images"></div>
+    <div class="row sp">
+      <div class="seg" role="group" aria-label="Image view">
+        <button data-v="orig" aria-pressed="false">X-ray</button>
+        <button data-v="overlay" aria-pressed="true">Overlay</button>
+        <button data-v="heat" aria-pressed="false">Heatmap</button>
+      </div>
+      <label class="row">Heatmap strength <input type="range" id="op" min="0" max="100" value="100" style="width:120px"></label>
+    </div>
+    <div class="viewer" id="viewer"><div class="empty">Your X-ray and the regions that drove the result will appear here.</div></div>
+    <div class="sub">Warm areas show where the model looked most when making its call.</div>
+  </section>
+
+  <section class="card" id="result">
+    <h2 style="font-size:22px;margin-bottom:12px">Result</h2>
+    <div id="out" class="sub">Upload an image to see the model's assessment.</div>
+    <div class="note">This is a research demo, not a medical device. Results cannot replace review by a qualified clinician.</div>
+  </section>
+
+  <section class="card full">
+    <div class="row sp" style="margin-bottom:8px">
+      <h2 style="font-size:20px">Session history</h2>
+      <span class="row"><button class="ghost" id="csv">Export CSV</button><button class="ghost" id="clear">Clear</button></span>
+    </div>
+    <table><thead><tr><th>Image</th><th>Result</th><th>Pneumonia</th><th>Normal</th></tr></thead><tbody id="hist"></tbody></table>
+    <div class="sub" id="noh">Nothing analyzed yet.</div>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+let items=[],cur=-1,view='overlay',thr=0.5;
+const thumbs=[];
+
+const drop=$('#drop'),file=$('#file');
+drop.onclick=()=>file.click();
+drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();file.click()}};
+['dragover','dragenter'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('on')}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('on')}));
+drop.addEventListener('drop',e=>send([...e.dataTransfer.files]));
+file.onchange=()=>{send([...file.files]);file.value=''};
+
+async function send(files){
+  files=files.filter(f=>f.type.startsWith('image/'));
+  if(!files.length)return;
+  const fd=new FormData();files.forEach(f=>fd.append('images',f));
+  fd.append('tta',$('#tta').checked?'1':'0');
+  document.body.classList.add('busy');$('#status').textContent=`Analyzing ${files.length} image${files.length>1?'s':''}…`;
+  try{
+    const r=await fetch('/api/predict',{method:'POST',body:fd});
+    const data=await r.json();
+    data.forEach((d,i)=>{d.src=URL.createObjectURL(files[i]);d.time=new Date().toLocaleTimeString();items.push(d)});
+    cur=items.length-data.length;render();
+    $('#status').textContent='';
+  }catch(e){$('#status').textContent='Could not reach the server. Is app.py still running?'}
+  document.body.classList.remove('busy');
+}
+
+const pn=d=>d.probs.PNEUMONIA;
+const label=d=>pn(d)>=thr?'Pneumonia likely':'No pneumonia signs';
+const pct=v=>(v*100).toFixed(1)+'%';
+
+function render(){
+  $('#strip').innerHTML='';
+  items.forEach((d,i)=>{
+    const b=document.createElement('button');b.className='th'+(i===cur?' sel':'');b.setAttribute('aria-label',d.name);
+    b.innerHTML=`<img src="${d.src}" alt=""><i style="background:${d.error?'#888':pn(d)>=thr?'var(--bad)':'var(--ok)'}"></i>`;
+    b.onclick=()=>{cur=i;render()};$('#strip').append(b);
+  });
+  const h=$('#hist');h.innerHTML='';
+  items.forEach((d,i)=>{
+    if(d.error)return;
+    const tr=document.createElement('tr');tr.className='h';
+    tr.innerHTML=`<td>${esc(d.name)}</td><td>${label(d)}</td><td>${pct(pn(d))}</td><td>${pct(d.probs.NORMAL)}</td>`;
+    tr.onclick=()=>{cur=i;render();scrollTo({top:0,behavior:'smooth'})};h.append(tr);
+  });
+  $('#noh').style.display=items.length?'none':'';
+  show();
+}
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function show(){
+  const d=items[cur],v=$('#viewer'),o=$('#out');
+  if(!d){return}
+  if(d.error){v.innerHTML=`<div class="empty">${esc(d.error)}</div>`;o.textContent=d.error;return}
+  const op=$('#op').value/100;
+  v.innerHTML=`<img src="${d.src}" alt="Uploaded X-ray">`+(view==='orig'?'':
+    `<img style="opacity:${view==='heat'?op:op}" src="${view==='heat'?d.heatmap:d.overlay}" alt="Model attention heatmap">`);
+  const bad=pn(d)>=thr,conf=Math.max(pn(d),1-pn(d));
+  const certainty=conf>=.9?'High confidence':conf>=.7?'Moderate confidence':'Low confidence, treat with caution';
+  o.className='';
+  o.innerHTML=`<div class="verdict ${bad?'bad':'ok'}"><div class="big">${label(d)}</div><div class="sub">${certainty} · ${esc(d.name)}</div></div>
+   ${bar('Pneumonia',pn(d),'var(--bad)')}${bar('Normal',d.probs.NORMAL,'var(--ok)')}
+   <div style="margin-top:22px"><label for="thr">Decision threshold: flag as pneumonia at <b id="tv">${Math.round(thr*100)}%</b></label>
+   <input type="range" id="thr" min="5" max="95" value="${thr*100}">
+   <div class="sub">Lower it to catch more possible cases (more false alarms). Raise it to be stricter.</div></div>`;
+  $('#thr').oninput=e=>{thr=e.target.value/100;render()};
+}
+const bar=(n,v,c)=>`<div class="bar"><div class="t"><span>${n}</span><b>${pct(v)}</b></div><div class="track"><div class="fill" style="width:${v*100}%;background:${c}"></div></div></div>`;
+
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  view=b.dataset.v;document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));show()});
+$('#op').oninput=show;
+$('#clear').onclick=()=>{items=[];cur=-1;$('#viewer').innerHTML='<div class="empty">Your X-ray and the regions that drove the result will appear here.</div>';$('#out').textContent='Upload an image to see the model\'s assessment.';render()};
+$('#csv').onclick=()=>{
+  const rows=[['image','result','pneumonia_prob','normal_prob','time'],...items.filter(d=>!d.error).map(d=>[d.name,label(d),pn(d).toFixed(4),d.probs.NORMAL.toFixed(4),d.time])];
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n')],{type:'text/csv'}));
+  a.download='xray_results.csv';a.click();
+};
+</script>
+</body>
+</html>
