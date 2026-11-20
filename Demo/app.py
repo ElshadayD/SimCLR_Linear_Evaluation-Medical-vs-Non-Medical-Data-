@@ -1,5 +1,5 @@
 """Chest X-ray pneumonia screening app (SimCLR ResNet50, fine-tuned layer4 + linear head)."""
-import base64, io, os, sys
+import base64, io, os, sys, traceback
 import numpy as np
 import torch, torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +8,11 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.models import resnet50
 
-MODEL_PATH = os.environ.get("MODEL_PATH", "linear_eval_simclr_cxr.pt")
+import urllib.request
+
+HF_REPO = os.environ.get("HF_REPO", "Elshaday/SimCLR_medical_image_classification")
+HF_FILE = os.environ.get("HF_FILE", "linear_eval_simclr_cxr.pt")
+LOCAL_PATH = os.environ.get("MODEL_PATH")  # optional: set to use a local file instead
 CLASS_NAMES = ["NORMAL", "PNEUMONIA"]  # ImageFolder order used in training
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -29,11 +33,22 @@ class PartialFineTuneModel(nn.Module):
 
 
 def load_model():
-    if not os.path.exists(MODEL_PATH):
-        sys.exit(f"Model not found at '{MODEL_PATH}'. Put linear_eval_simclr_cxr.pt next to app.py "
-                 "or set MODEL_PATH.")
+    if LOCAL_PATH:
+        src = LOCAL_PATH
+    else:
+        url = f"https://huggingface.co/{HF_REPO}/resolve/main/{HF_FILE}"
+        print(f"Loading model straight into memory from {url} (nothing is saved to disk)...")
+        req = urllib.request.Request(url)
+        if os.environ.get("HF_TOKEN"):  # only needed for private repos
+            req.add_header("Authorization", f"Bearer {os.environ['HF_TOKEN']}")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                src = io.BytesIO(r.read())
+        except Exception as e:
+            sys.exit(f"Could not fetch the model from Hugging Face: {e}\n"
+                     "If the repo is private, set HF_TOKEN. If you are offline, set MODEL_PATH.")
     m = PartialFineTuneModel(len(CLASS_NAMES))
-    sd = torch.load(MODEL_PATH, map_location="cpu")
+    sd = torch.load(src, map_location="cpu")
     if isinstance(sd, dict) and "state_dict" in sd:
         sd = sd["state_dict"]
     m.load_state_dict(sd)
@@ -50,7 +65,8 @@ tf = transforms.Compose([
 _store = {}
 def _fwd(_, __, out):
     _store["act"] = out
-    out.register_hook(lambda g: _store.__setitem__("grad", g))
+    if out.requires_grad:  # skip during no_grad passes (e.g. mirrored view)
+        out.register_hook(lambda g: _store.__setitem__("grad", g))
 model.backbone.layer4.register_forward_hook(_fwd)
 
 
@@ -97,8 +113,14 @@ def analyze(img, tta=False):
     }
 
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"))
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
+
+
+@app.errorhandler(Exception)
+def on_error(e):
+    traceback.print_exc()
+    return jsonify(error=f"{type(e).__name__}: {e}"), 500
 
 
 @app.get("/")
@@ -116,8 +138,9 @@ def predict():
             res = analyze(img, tta)
             res["name"] = f.filename
             out.append(res)
-        except Exception as e:  # unreadable file
-            out.append({"name": f.filename, "error": f"Could not read image: {e}"})
+        except Exception as e:
+            traceback.print_exc()  # full details appear in the terminal
+            out.append({"name": f.filename, "error": f"Analysis failed: {e}"})
     return jsonify(out)
 
 
