@@ -8,7 +8,9 @@ This project investigates how well SimCLR self-supervised representations pretra
 Using a ResNet-50 model pretrained on CIFAR-100, three experiments were conducted to compare partial fine-tuning and linear evaluation on medical and non-medical datasets.
 
 The main research question was whether representations learned from natural images can generalize to grayscale medical images such as chest X-rays.
+## Demo
 
+![Project Demo](demo.png)
 ## Datasets
 
 **1. Chest X-Ray Pneumonia (Medical)**
